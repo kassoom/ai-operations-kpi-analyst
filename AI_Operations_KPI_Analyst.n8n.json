@@ -1,0 +1,273 @@
+{
+  "name": "AI Operations KPI Analyst — Exercise 2",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "1d268eb4-29ee-477d-af9e-5178241aa3f1",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "17e82aa9-a157-4a26-818b-21b880470a63",
+              "name": "sla_gap",
+              "value": "={{ $json.target - $json.sla }}",
+              "type": "number"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        448,
+        0
+      ],
+      "id": "a430d919-a241-49b9-8f7e-ef79298497c9",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e1f1b0ba-e062-4d00-ac24-24f3f334f97e",
+              "leftValue": "={{ $json.sla }}",
+              "rightValue": "={{ $json.target }}",
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        0
+      ],
+      "id": "b2f55996-d823-41f5-82b3-5703ba5d5209",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cba5bb3f-ad30-4b80-b42e-732f59d76937",
+              "name": "management_message",
+              "value": "=={{ $json.location + \" SLA meets or exceeds the target.\" }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        896,
+        96
+      ],
+      "id": "14cdda6f-976a-4ddb-a78e-f28a96c6f690",
+      "name": "Edit Fields3"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  { json: { location: \"Dubai\", sla: 66.6, target: 90 } },\n  { json: { location: \"Ajman\", sla: 79.8, target: 90 } },\n  { json: { location: \"Al Ain\", sla: 81.4, target: 90 } },\n  { json: { location: \"Sharjah\", sla: 81.9, target: 90 } },\n  { json: { location: \"Abu Dhabi\", sla: 82.3, target: 90 } }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "14ffa74b-bc0d-446d-9a33-95e940b000a5",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst lines = items.map(item => {\n  const data = item.json;\n  return `${data.location}: SLA ${data.sla}% — ${data.sla_gap.toFixed(1)} points below target`;\n});\n\nreturn [\n  {\n    json: {\n      management_summary: lines.join(\"\\n\")\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        -96
+      ],
+      "id": "df4158cc-7bdc-41f9-9c46-bf27a1fccf70",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const summary = $json.management_summary || `Dubai: SLA 66.6% — 23.4 points below target\nAjman: SLA 79.8% — 10.2 points below target\nAl Ain: SLA 81.4% — 8.6 points below target\nSharjah: SLA 81.9% — 8.1 points below target\nAbu Dhabi: SLA 82.3% — 7.7 points below target`;\n\nconst rows = summary.split(\"\\n\").filter(Boolean).map(line => {\n  const match = line.match(\n    /^(.+): SLA ([\\d.]+)% — ([\\d.]+) points below target$/\n  );\n\n  return {\n    location: match[1],\n    sla: Number(match[2]),\n    gap: Number(match[3])\n  };\n});\n\nconst priority = [...rows].sort((a, b) => b.gap - a.gap)[0];\n\nconst analysis_prompt = `You are a senior operations analyst.\n\nSLA summary:\n${summary}\n\nVerified calculation:\n- Priority location: ${priority.location}\n- Priority SLA: ${priority.sla}%\n- Priority gap: ${priority.gap.toFixed(1)} points below target\n\nWrite a concise report.\n\nRules:\n- Repeat the verified priority facts exactly.\n- Do not recalculate or change the priority location.\n- Do not invent trends, causes, averages, or unsupported facts.\n- This is single-period data, not time-series data.\n\nReturn:\n1. Main issue\n2. Priority location and gap\n3. Two supported comparisons\n4. Three practical actions\n5. One limitation`;\n\nconst requestBody = {\n  model: \"llama-3.2-3b-instruct\",\n  messages: [\n    {\n      role: \"user\",\n      content: analysis_prompt\n    }\n  ],\n  temperature: 0.1,\n  max_tokens: 250,\n  stream: false\n};\n\nreturn {\n  json: {\n    ...$json,\n    analysis_prompt,\n    verified_priority: priority,\n    requestBody\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -96
+      ],
+      "id": "4eca6311-6aee-4d06-91d4-f87f88890cc0",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:1234/v1/chat/completions",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.requestBody }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1344,
+        -96
+      ],
+      "id": "7897c089-b258-4566-8ebb-a28e5427f380",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawReport = $json.choices?.[0]?.message?.content || \"\";\n\nconst aiReport = rawReport\n  .replace(/\\\\n/g, \"\\n\")\n  .trim();\n\nreturn {\n  json: {\n    ai_management_report: aiReport\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        -96
+      ],
+      "id": "1ec75e4a-c7ba-4241-b9f4-f78a74b22d95",
+      "name": "Code in JavaScript3"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript3": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "924c57e1-01d4-435c-9a5e-ee24828a0a2b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ba983bb91c949e2b48a3d0021d78cbe8aa260d89c9619e1b9da7a45315fed118"
+  },
+  "nodeGroups": [],
+  "id": "BFGbsTLnDWpJPNMa",
+  "tags": []
+}
