@@ -6,6 +6,8 @@ An n8n workflow that transforms operational SLA data into a validated, AI-genera
 
 The workflow reads the GulfFix Home Services job-level CSV/XLSX, keeps only completed jobs, calculates trusted KPIs by branch and service type, identifies the priority issue deterministically, and sends verified facts to a local Llama 3.2 model through LM Studio.
 
+The current exported workflow is `AI_Operations_KPI_Analyst.n8n.json`. It contains the tested six-node flow from the local GulfFix CSV through final management-report formatting. When importing it on another computer, update the Read/Write Files from Disk node to point to that computer's allowed copy of `GulfFix_Service_Jobs.csv`.
+
 ```text
 GulfFix CSV/XLSX → completed jobs → KPI aggregation → verified priority
                  → management summary → LM Studio → ai_management_report
